@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  data:
+    redis:
+      repositories:
+        enabled: false
+
+jwt:
+  # Deterministic test secret key (256-bit HMAC key)
+  secret: 746573742d7365637265742d6b65792d666f722d666f6f642d64656c69766572792d6170702d3132333435
+  expiration-ms: 3600000
+
+logging:
+  level:
+    root: WARN
+    com.example.fooddelivery: INFO

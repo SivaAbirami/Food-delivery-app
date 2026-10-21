@@ -1,0 +1,99 @@
+// =============================================================================
+// Grafana Alloy Configuration
+//
+// Alloy is the central telemetry pipeline (successor to Grafana Agent).
+// This config sets up three pipelines:
+//
+//  1. METRICS: Scrape /actuator/prometheus → remote_write to Mimir
+//  2. TRACES:  Receive OTLP from Spring Boot app → forward to Tempo
+//  3. (Extensible: logs can be added here if using file-based collection)
+//
+// Alloy River syntax: https://grafana.com/docs/alloy/latest/
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// 1. METRICS PIPELINE — Prometheus scrape → Mimir
+// ---------------------------------------------------------------------------
+
+// Scrape the Spring Boot actuator prometheus endpoint
+prometheus.scrape "food_delivery_app" {
+  // Target: Spring Boot app running on host machine (host.docker.internal)
+  // When running the app in Docker, replace with the container name/IP
+  targets = [
+    {"__address__" = "host.docker.internal:8080", "app" = "food-delivery-backend", "env" = "local"},
+  ]
+
+  // Scrape every 15 seconds (standard for dev)
+  scrape_interval = "15s"
+  scrape_timeout  = "10s"
+
+  // Path to Actuator Prometheus endpoint
+  metrics_path = "/actuator/prometheus"
+
+  // Forward scraped metrics to the remote_write component below
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+// Remote-write scraped metrics to Mimir
+prometheus.remote_write "mimir" {
+  endpoint {
+    url = "http://mimir:9009/api/v1/push"
+
+    // Required Mimir header when multitenancy_enabled = false
+    headers = {
+      "X-Scope-OrgID" = "demo",
+    }
+
+    queue_config {
+      capacity             = 10000
+      max_samples_per_send = 2000
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2. TRACES PIPELINE — OTLP receiver → Tempo
+// ---------------------------------------------------------------------------
+
+// Receive OTLP traces from Spring Boot (sent to Alloy's 4318 port, mapped to 4319 on host)
+otelcol.receiver.otlp "food_delivery_traces" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// Export traces to Tempo via OTLP gRPC
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+    tls {
+      insecure = true
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. LOGS PIPELINE (Optional — for Docker log collection)
+//    Uncomment this section if you want Alloy to tail Docker container logs
+//    instead of relying on the in-app Loki4j Logback appender.
+// ---------------------------------------------------------------------------
+
+// loki.source.docker "food_delivery_containers" {
+//   host       = "unix:///var/run/docker.sock"
+//   targets    = discovery.docker.food_containers.targets
+//   forward_to = [loki.write.loki.receiver]
+//   labels     = {cluster = "food-delivery-local"}
+// }
+//
+// loki.write "loki" {
+//   endpoint {
+//     url = "http://loki:3100/loki/api/v1/push"
+//   }
+// }

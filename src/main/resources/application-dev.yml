@@ -1,0 +1,21 @@
+spring:
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        highlight_sql: true
+
+jwt:
+  # Development fallback secret (256-bit HMAC key)
+  secret: ${JWT_SECRET:4a6f6f642d64656c69766572792d6465762d7365637265742d6b65792d3235362d62697473}
+  expiration-ms: 86400000
+
+logging:
+  level:
+    root: INFO
+    com.example.fooddelivery: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE

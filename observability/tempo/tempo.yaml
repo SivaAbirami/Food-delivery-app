@@ -1,0 +1,61 @@
+# =============================================================================
+# Tempo Configuration — Single-process mode (all-in-one for local dev)
+# Compatible with grafana/tempo:2.7.1
+# =============================================================================
+
+server:
+  http_listen_port: 3200
+  log_level: warn
+
+# Distributor receives spans from the app via OTLP
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+# Ingester buffers traces before flushing to storage
+ingester:
+  trace_idle_period: 10s
+  max_block_bytes: 1000000
+  max_block_duration: 5m
+
+# Compactor merges and cleans up old blocks
+compactor:
+  compaction:
+    compaction_window: 1h
+    max_block_bytes: 100000000
+    block_retention: 48h
+    compacted_block_retention: 10m
+
+# Storage backend — filesystem for local dev
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal
+
+# Metrics generator: derives RED metrics from traces and pushes to Mimir
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: food-delivery-local
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://mimir:9009/api/v1/push
+        send_exemplars: true
+
+# Enable metrics_generator processors per tenant (required in Tempo 2.x)
+overrides:
+  defaults:
+    metrics_generator:
+      processors:
+        - service-graphs
+        - span-metrics

@@ -1,0 +1,90 @@
+apiVersion: 1
+
+# =============================================================================
+# Grafana Datasource Provisioning
+#
+# These datasources are automatically created when Grafana starts.
+# They connect Grafana to each component of the LGTM stack.
+# =============================================================================
+
+datasources:
+
+  # ---------------------------------------------------------------------------
+  # Mimir — Prometheus-compatible metrics datasource
+  # Used for: dashboards, alerting, RED metrics from Tempo
+  # ---------------------------------------------------------------------------
+  - name: Mimir
+    type: prometheus
+    uid: mimir
+    access: proxy
+    url: http://mimir:9009/prometheus
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+      # Mimir org ID (matches X-Scope-OrgID sent by Alloy)
+      customQueryParameters: "X-Scope-OrgID=demo"
+      timeInterval: "15s"
+    editable: false
+
+  # ---------------------------------------------------------------------------
+  # Loki — Log aggregation datasource
+  # Used for: log exploration, log-to-trace correlation
+  # ---------------------------------------------------------------------------
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      maxLines: 1000
+      # Derived fields: auto-detect traceId in logs and link to Tempo
+      derivedFields:
+        - datasourceUid: tempo
+          matcherRegex: "traceId=([a-f0-9]{32})"
+          name: TraceID
+          url: "$${__value.raw}"
+          urlDisplayLabel: "View Trace in Tempo"
+    editable: false
+
+  # ---------------------------------------------------------------------------
+  # Tempo — Distributed tracing datasource
+  # Used for: trace search, trace detail view, trace-to-log/metrics correlation
+  # ---------------------------------------------------------------------------
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      httpMethod: GET
+      # Enable TraceQL search
+      search:
+        hide: false
+      # Link traces → Loki logs (trace ID correlation)
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: "-1m"
+        spanEndTimeShift: "1m"
+        tags:
+          - key: service.name
+            value: app
+        filterByTraceID: true
+        filterBySpanID: false
+      # Link traces → Mimir metrics (service graph)
+      tracesToMetrics:
+        datasourceUid: mimir
+        tags:
+          - key: service.name
+            value: app
+        queries:
+          - name: Request Rate
+            query: "rate(traces_spanmetrics_calls_total{$$__tags}[5m])"
+          - name: Error Rate
+            query: "rate(traces_spanmetrics_calls_total{$$__tags,status_code=\"STATUS_CODE_ERROR\"}[5m])"
+      # Service graph from Tempo-generated metrics
+      serviceMap:
+        datasourceUid: mimir
+      # Node graph panel
+      nodeGraph:
+        enabled: true
+    editable: false

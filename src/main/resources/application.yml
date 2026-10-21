@@ -1,0 +1,69 @@
+spring:
+  application:
+    name: food-delivery-backend
+  profiles:
+    default: dev
+
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:food_delivery_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:food_user}
+    password: ${DB_PASSWORD:food_password}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+
+jwt:
+  secret: ${JWT_SECRET:}
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose all actuator endpoints including prometheus (scraped by Mimir via Alloy)
+        include: health,info,prometheus,metrics,loggers,env,threaddump,heapdump
+  endpoint:
+    health:
+      show-details: when_authorized
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      # Common labels added to every metric — enables filtering by app/env in Grafana
+      application: ${spring.application.name}
+      environment: ${ENVIRONMENT:local}
+    distribution:
+      # Enables histogram buckets for HTTP request latency percentiles (p50, p95, p99)
+      percentiles-histogram:
+        http.server.requests: true
+  tracing:
+    # Sample 100% of requests in dev; lower to 0.1 in production
+    sampling:
+      probability: ${TRACING_SAMPLE_RATE:1.0}
+  otlp:
+    # OTLP exporter sends traces to Tempo via Grafana Alloy (OTLP receiver on port 4318)
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces
+    metrics:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/metrics

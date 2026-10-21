@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- ===== Spring Boot Default Console Appender ===== -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!--
+        springProperty resolves the value at Logback config load time (Spring context).
+        This means Loki4j receives the already-resolved URL string — not a raw ${...} expression.
+        Without this, Loki4j 1.5.x tries to parse "${LOKI_URL:...}" as a URL and fails.
+    -->
+    <springProperty scope="context" name="LOKI_URL"
+                    source="loki.url"
+                    defaultValue="http://localhost:3100"/>
+
+    <!-- ===== Loki4j Appender — Ships logs to Loki ===== -->
+    <springProfile name="!test">
+        <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
+            <!-- Batch settings: send logs every 1 second or when 1000 lines accumulate -->
+            <batchMaxItems>1000</batchMaxItems>
+            <batchTimeoutMs>1000</batchTimeoutMs>
+
+            <!-- HTTP client — Logback resolves ${LOKI_URL} BEFORE Loki4j sees it -->
+            <http>
+                <url>${LOKI_URL}/loki/api/v1/push</url>
+            </http>
+
+            <format>
+                <!-- Stream labels: these become Loki stream selectors in LogQL queries -->
+                <label>
+                    <pattern>
+                        app=${spring.application.name},
+                        env=${ENVIRONMENT:-local},
+                        level=%level
+                    </pattern>
+                    <sortByKey>true</sortByKey>
+                </label>
+
+                <!--
+                    traceId and spanId are injected into MDC by Micrometer Tracing automatically.
+                    Grafana uses them to create clickable "Logs → Traces" links to Tempo.
+                -->
+                <message>
+                    <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} traceId=%X{traceId:-none} spanId=%X{spanId:-none} - %msg%n</pattern>
+                </message>
+            </format>
+        </appender>
+    </springProfile>
+
+    <!-- ===== Root Logger ===== -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <springProfile name="!test">
+            <appender-ref ref="LOKI"/>
+        </springProfile>
+    </root>
+
+    <!-- Fine-grained log levels -->
+    <logger name="com.example.fooddelivery" level="DEBUG"/>
+    <logger name="org.springframework.security" level="WARN"/>
+    <logger name="org.hibernate.SQL" level="DEBUG"/>
+    <logger name="org.hibernate.orm.jdbc.bind" level="TRACE"/>
+
+</configuration>

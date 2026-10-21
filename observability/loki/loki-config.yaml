@@ -1,0 +1,53 @@
+# =============================================================================
+# Loki Configuration — Single-process mode (suitable for local/dev)
+#
+# Key design decisions:
+#  - Uses filesystem storage (not S3) for simplicity in local dev
+#  - auth_enabled: false — no multi-tenancy (single tenant: "fake")
+#  - ring KV store: in-memory (no etcd/consul needed)
+# =============================================================================
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+# Schema defines how Loki indexes label data
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: loki_index_
+        period: 24h
+
+# Ruler config for alerting rules (optional — ready for when you add alerts)
+ruler:
+  alertmanager_url: http://localhost:9093
+
+# Retention: keep logs for 7 days locally
+limits_config:
+  retention_period: 168h
+  # Allow out-of-order log ingestion (common with async log shippers)
+  ingestion_rate_mb: 16
+  ingestion_burst_size_mb: 32
+
+compactor:
+  working_directory: /loki/compactor
+  delete_request_store: filesystem
