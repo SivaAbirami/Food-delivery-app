@@ -1,0 +1,223 @@
+# =============================================================================
+# Food Delivery Backend — Full Observability Stack (LGTM)
+#
+# Services:
+#   Infrastructure:  mysql, redis
+#   LGTM Stack:      loki (logs), mimir (metrics), tempo (traces), grafana (viz)
+#   Collector:       alloy (Grafana Alloy — collects & routes telemetry)
+#
+# Start everything:  docker-compose up -d
+# Grafana UI:        http://localhost:3000  (admin / admin)
+# =============================================================================
+
+services:
+
+  # ===========================================================================
+  # Infrastructure
+  # ===========================================================================
+
+  mysql:
+    image: mysql:8.0
+    container_name: food-delivery-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: food_delivery_db
+      MYSQL_USER: food_user
+      MYSQL_PASSWORD: food_password
+      MYSQL_ROOT_PASSWORD: root_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - food-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: food-delivery-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - food-net
+
+
+  # ===========================================================================
+  # L — Loki (Log Storage)
+  # Receives log batches pushed by the Loki4j Logback appender in the app.
+  # Stores logs indexed by label (app, env, level) in local object storage.
+  # ===========================================================================
+
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: food-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./observability/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - food-net
+
+  # ===========================================================================
+  # M — Mimir (Metrics Storage)
+  # Provides long-term, scalable Prometheus-compatible storage.
+  # Prometheus metrics from the app's /actuator/prometheus endpoint are
+  # scraped by Grafana Alloy and remote-written here.
+  # ===========================================================================
+
+  mimir:
+    image: grafana/mimir:2.14.0
+    container_name: food-mimir
+    restart: unless-stopped
+    ports:
+      - "9009:9009"
+    command: ["--config.file=/etc/mimir/mimir.yaml"]
+    volumes:
+      - ./observability/mimir/mimir.yaml:/etc/mimir/mimir.yaml:ro
+      - mimir_data:/data
+    healthcheck:
+      disable: true
+    networks:
+      - food-net
+
+  # ===========================================================================
+  # T — Tempo (Distributed Trace Storage)
+  # Receives OTLP traces from the app (via Grafana Alloy's OTLP receiver).
+  # Stores trace spans and exposes a Tempo query API for Grafana.
+  # ===========================================================================
+
+  tempo:
+    image: grafana/tempo:2.7.1
+    container_name: food-tempo
+    restart: unless-stopped
+    ports:
+      - "3200:3200"   # Tempo HTTP API (Grafana datasource)
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver (Spring Boot sends traces here)
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3200/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - food-net
+
+  # ===========================================================================
+  # G — Grafana (Visualization)
+  # Unified dashboarding and alerting over Loki, Mimir, and Tempo.
+  # Pre-provisioned datasources and dashboards are loaded at startup.
+  # ===========================================================================
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: food-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      # Enable correlations between logs, metrics and traces
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      loki:
+        condition: service_healthy
+      mimir:
+        # Mimir image has no shell — healthcheck can't use wget via shell.
+        # It IS running fine; we just wait for it to start, not be "healthy".
+        condition: service_started
+      tempo:
+        condition: service_healthy
+    networks:
+      - food-net
+
+  # ===========================================================================
+  # Grafana Alloy (OpenTelemetry Collector)
+  # Central telemetry pipeline:
+  #   - Scrapes /actuator/prometheus → remote-writes to Mimir
+  #   - Receives OTLP traces from the app → forwards to Tempo
+  #   - Tail-scrapes logs (optional sidecar mode)
+  # ===========================================================================
+
+  alloy:
+    image: grafana/alloy:v1.5.1
+    container_name: food-alloy
+    restart: unless-stopped
+    ports:
+      - "12345:12345"  # Alloy UI
+      - "4319:4318"    # OTLP HTTP receiver (app → Alloy → Tempo)
+      - "4320:4317"    # OTLP gRPC receiver
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      loki:
+        condition: service_healthy
+      mimir:
+        condition: service_started
+      tempo:
+        condition: service_healthy
+    networks:
+      - food-net
+
+# =============================================================================
+# Volumes
+# =============================================================================
+
+volumes:
+  mysql_data:
+    driver: local
+  loki_data:
+    driver: local
+  mimir_data:
+    driver: local
+  tempo_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alloy_data:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+
+networks:
+  food-net:
+    driver: bridge

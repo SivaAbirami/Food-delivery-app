@@ -67,6 +67,7 @@ public class OrderMapper {
                 order.getDeliveryFee(),
                 order.getTaxAmount(),
                 order.getTotalAmount(),
+                order.getDeliveryOtp(),
                 order.getCreatedAt(),
                 order.getUpdatedAt()
         );

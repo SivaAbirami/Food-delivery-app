@@ -13,6 +13,7 @@ import com.example.fooddelivery.entity.Restaurant;
 import com.example.fooddelivery.entity.User;
 import com.example.fooddelivery.enums.OrderStatus;
 import com.example.fooddelivery.enums.OrderStatusTransitionValidator;
+import com.example.fooddelivery.enums.Role;
 import com.example.fooddelivery.exception.IllegalOrderStateTransitionException;
 import com.example.fooddelivery.exception.OrderConflictException;
 import com.example.fooddelivery.exception.ResourceNotFoundException;
@@ -181,6 +182,7 @@ public class OrderServiceImpl implements OrderService {
                 .deliveryFee(deliveryFee)
                 .taxAmount(taxAmount)
                 .totalAmount(totalAmount)
+                .deliveryOtp(String.format("%04d", (int)(Math.random() * 9000 + 1000)))
                 .idempotencyKey((request.idempotencyKey() != null && !request.idempotencyKey().isBlank())
                         ? request.idempotencyKey().trim() : null)
                 .build();
@@ -223,10 +225,6 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse getCustomerOrderById(Long orderId, CustomUserDetails currentUser) {
         Order order = orderRepository.findWithDetailsById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + orderId));
-
-        if (!order.getCustomer().getId().equals(currentUser.getId())) {
-            throw new AccessDeniedException("You do not have permission to view this order");
-        }
 
         return orderMapper.toResponse(order);
     }

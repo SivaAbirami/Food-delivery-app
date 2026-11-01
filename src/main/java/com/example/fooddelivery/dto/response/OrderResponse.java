@@ -24,10 +24,11 @@ public record OrderResponse(
         BigDecimal deliveryFee,
         BigDecimal taxAmount,
         BigDecimal totalAmount,
+        String deliveryOtp,
         Instant createdAt,
         Instant updatedAt
 ) {
-    // Constructor ensuring clean record instantiation
+    // Backward-compatible constructor
     public OrderResponse(
             Long id,
             String orderNumber,
@@ -46,21 +47,7 @@ public record OrderResponse(
             Instant createdAt,
             Instant updatedAt
     ) {
-        this.id = id;
-        this.orderNumber = orderNumber;
-        this.customerId = customerId;
-        this.restaurantId = restaurantId;
-        this.restaurantName = restaurantName;
-        this.deliveryPartnerId = deliveryPartnerId;
-        this.status = status;
-        this.deliveryAddress = deliveryAddress;
-        this.specialInstructions = specialInstructions;
-        this.items = items != null ? items : List.of();
-        this.subtotalAmount = subtotalAmount;
-        this.deliveryFee = deliveryFee;
-        this.taxAmount = taxAmount;
-        this.totalAmount = totalAmount;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
+        this(id, orderNumber, customerId, restaurantId, restaurantName, deliveryPartnerId, status,
+                deliveryAddress, specialInstructions, items, subtotalAmount, deliveryFee, taxAmount, totalAmount, null, createdAt, updatedAt);
     }
 }

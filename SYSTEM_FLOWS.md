@@ -10,7 +10,7 @@ This document contains comprehensive visual diagrams and ASCII flowcharts for al
 - [2. User Roles & Capabilities](#2-user-roles--capabilities)
 - [3. Customer Journey Flow](#3-customer-journey-flow)
 - [4. Restaurant Owner Flow](#4-restaurant-owner-flow)
-- [5. Delivery Partner Flow & Concurrency Race](#5-delivery-partner-flow--concurrency-race)
+- [5. Delivery Partner Flow & Concurrency Race] (#5-delivery-partner-flow--concurrency-race)
 - [6. Order Lifecycle State Machine](#6-order-lifecycle-state-machine)
 - [7. Cart & Checkout Invariants Flow](#7-cart--checkout-invariants-flow)
 - [8. Security & Authorization Model](#8-security--authorization-model)

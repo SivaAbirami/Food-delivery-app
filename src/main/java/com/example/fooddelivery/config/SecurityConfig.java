@@ -102,13 +102,21 @@ public class SecurityConfig {
                                 "/api/auth/login"
                         ).permitAll()
 
-                        // Public read-only restaurant and menu browsing endpoints
+                        // Public read-only restaurant, menu, and dynamic offers browsing
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/restaurants",
                                 "/api/restaurants/*",
                                 "/api/restaurants/*/menu",
-                                "/api/menu-items/*"
+                                "/api/restaurants/*/offers",
+                                "/api/menu-items/*",
+                                "/api/offers",
+                                "/api/offers/**",
+                                "/api/orders/*/delivery-location"
+                        ).permitAll()
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/offers/validate"
                         ).permitAll()
 
                         // All other endpoints require authentication

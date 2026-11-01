@@ -92,6 +92,9 @@ public class Order {
     @Column(name = "total_amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount;
 
+    @Column(name = "delivery_otp", length = 6)
+    private String deliveryOtp;
+
     @Column(name = "idempotency_key", unique = true, length = 128)
     private String idempotencyKey;
 

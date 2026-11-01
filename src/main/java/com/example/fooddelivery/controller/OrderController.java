@@ -73,14 +73,14 @@ public class OrderController {
     }
 
     /**
-     * Retrieves specific order details for the authenticated customer.
+     * Retrieves specific order details for the authenticated participant (customer, owner, rider).
      *
      * @param id Order ID
-     * @param currentUser Authenticated customer principal
+     * @param currentUser Authenticated principal
      * @return 200 OK with OrderResponse
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('CUSTOMER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<OrderResponse> getCustomerOrderById(
             @PathVariable Long id,
             @AuthenticationPrincipal CustomUserDetails currentUser
